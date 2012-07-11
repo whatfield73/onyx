@@ -79,7 +79,7 @@ enyo.kind({
 		return true;
 	},
 	cancelTap: function(inSender, inEvent) {
-		this.$.client.animateToMax();
+		this.$.client.animateTo(0);
 		this.doCancel();
 		return true;
 	},
