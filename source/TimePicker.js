@@ -50,9 +50,6 @@ enyo.kind({
 	initDefaults: function() {
 		// defaults that match en_US for when g11n isn't loaded
 		var am = "AM", pm = "PM";
-		if (this.is24HrMode == null) {
-			this.is24HrMode = false;
-		}
 		// Attempt to use the g11n lib (ie assume it is loaded)
 		if (enyo.g11n) {
 			this._tf = new enyo.g11n.Fmts({locale:this.locale});
@@ -62,6 +59,9 @@ enyo.kind({
 			if (this.is24HrMode == null) {
 				this.is24HrMode = !this._tf.isAmPm();
 			}
+		}
+		else if (this.is24HrMode == null) {
+			this.is24HrMode = false;
 		}
 
 		this.setupPickers(this._tf ? this._tf.getTimeFieldOrder() : 'hma');
@@ -162,12 +162,12 @@ enyo.kind({
 			var ampm = this.$.ampmPicker.getParent().controlAtIndex(0).content;
 			h = h + (h == 12 ? -12 : 0) + (this.isAm(ampm) ? 0 : 12);
 		}
-		this.value = this.calcTime(h, this.value.getMinutes());
+		this.setValue(this.calcTime(h, this.value.getMinutes()));
 		this.doSelect({name:this.name, value:this.value});
 		return true;
 	},
 	updateMinute: function(inSender, inEvent){
-		this.value = this.calcTime(this.value.getHours(), inEvent.selected.value);
+		this.setValue(this.calcTime(this.value.getHours(), inEvent.selected.value));
 		this.doSelect({name:this.name, value:this.value});
 		return true;
 	},
@@ -176,7 +176,7 @@ enyo.kind({
 		if (!this.is24HrMode){
 			h = h + (h > 11 ? (this.isAm(inEvent.content) ? -12 : 0) : (this.isAm(inEvent.content) ? 0 : 12));
 		}
-		this.value = this.calcTime(h, this.value.getMinutes());
+		this.setValue(this.calcTime(h, this.value.getMinutes()));
 		this.doSelect({name:this.name, value:this.value});
 		return true;
 	},

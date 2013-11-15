@@ -8,7 +8,7 @@ Here's an example:
 
 		enyo.kind({
 			name: "App",
-			kind: "TabPanels",
+			kind: "onyx.TabPanels",
 			fit: true,
 			components: [
 				{kind: "MyStartPanel"},
@@ -16,128 +16,175 @@ Here's an example:
 				{kind: "MyLastPanel"}
 			]
 		});
-		new App().write();
+		new App().renderInto(document.body);
 */
 
-enyo.kind(
-	{
-		name: "enyo.TabPanels",
-		kind: "Panels",
-		//* @protected
-		draggable: false,
+enyo.kind({
+	name: "onyx.TabPanels",
+	kind: "enyo.Panels",
+	//* @protected
+	draggable: false,
 
-		handlers  : {
-			onTabChanged: 'switchPanel'
-		},
+	handlers  : {
+		onTabChanged: 'switchPanel'
+	},
 
-		tabTools: [
-			{
-				kind: 'onyx.TabBar',
-				isPanel: true,
-				name: 'bar'
-			},
-			{
-				name: "client",
-				isPanel: true,
-				fit: true,
-				kind: "Panels",
-				classes: "enyo-tab-panels",
-				onTransitionStart: "clientTransitionStart"
-			}
-		],
+	/**
+	 * Set a maximum height for the scrollable menu that can be raised on the right of
+	 * the tab bar.
+	 */
+	published: {
+		maxMenuHeight: null
+	},
 
-		dlog: function () {
-			if (this.debug) {
-				this.log(arguments) ;
-			}
+	tabTools: [
+		{
+			kind: 'onyx.TabBar',
+			isPanel: true,
+			name: 'bar'
 		},
+		{
+			name: "client",
+			isPanel: true,
+			fit: true,
+			kind: "Panels",
+			classes: "enyo-tab-panels",
+			onTransitionStart: "clientTransitionStart"
+		}
+	],
 
-		create: function() {
-			this.inherited(arguments);
-			this.dlog("create called");
-			// getPanels called on client will return panels of *this* kind
-			this.$.client.getPanels = this.bindSafely("getClientPanels");
+	create: function() {
+		this.inherited(arguments);
 
-			// basically, set all these Panel parameters to false
-			this.draggableChanged();
-			this.animateChanged();
-			this.wrapChanged();
-		},
-		initComponents: function() {
-			this.dlog("initComponents called");
-			this.createChrome(this.tabTools);
-			this.inherited(arguments);
-			this.dlog("initComponents done");
-		},
-		getClientPanels: function() {
-			return this.getPanels();
-		},
+		if (this.getMaxMenuHeight()) {
+			this.maxMenuHeightChanged();
+		}
 
-		flow: function() {
-			this.inherited(arguments);
-			this.$.client.flow();
-		},
-		reflow: function() {
-			this.inherited(arguments);
-			this.$.client.reflow();
-		},
-		draggableChanged: function() {
-			this.$.client.setDraggable(this.draggable);
-			this.draggable = false;
-		},
-		animateChanged: function() {
-			this.$.client.setAnimate(this.animate);
-			this.animate = false;
-		},
-		wrapChanged: function() {
-			this.$.client.setWrap(this.wrap);
-			this.wrap = false;
-		},
+		// getPanels called on client will return panels of *this* kind
+		this.$.client.getPanels = this.bindSafely("getClientPanels");
 
-		isClient: function(inControl) {
-			return ! inControl.isPanel ;
-		},
-		addControl: function(inControl) {
-			this.dlog("addControl called on name "+ inControl.name + " content "+inControl.content );
-			this.inherited(arguments);
-			if (this.isClient(inControl)) {
-				inControl._tab = this.$.bar.addTab(inControl) ;
-			}
-			this.dlog("addControl done");
-		},
-		removeControl: function(inControl) {
-			if (this.isClient(inControl) && inControl._tab) {
-				inControl._tab.destroy();
-			}
-			this.inherited(arguments);
-		},
+		// basically, set all these Panel parameters to false
+		this.draggableChanged();
+		this.animateChanged();
+		this.wrapChanged();
+	},
 
-		// layout is a property of inherited UiComponent
-		layoutKindChanged: function() {
-			if (!this.layout) {
-				this.layout = enyo.createFromKind("FittableRowsLayout", this);
-			}
-			this.$.client.setLayoutKind(this.layoutKind);
-		},
-		indexChanged: function() {
-			// FIXME: initialization order problem
-			if (this.$.client.layout) {
-				this.$.client.setIndex(this.index);
-			}
-			this.index = this.$.client.getIndex();
-		},
-		switchPanel: function(inSender, inEvent) {
-			if (this.hasNode()) {
-				var i = inEvent.index;
-				this.dlog("switchPanel called with caption "+ inEvent.caption) ;
-				if (this.getIndex() != i) {
-					this.setIndex(i);
+	maxMenuHeightChanged: function() {
+		this.$.bar.setMaxMenuHeight(this.getMaxMenuHeight()) ;
+	},
+	initComponents: function() {
+		this.createChrome(this.tabTools);
+		this.inherited(arguments);
+	},
+	getClientPanels: function() {
+		return this.getPanels();
+	},
+
+	flow: function() {
+		this.inherited(arguments);
+		this.$.client.flow();
+	},
+	reflow: function() {
+		this.inherited(arguments);
+		this.$.client.reflow();
+	},
+	draggableChanged: function() {
+		this.$.client.setDraggable(this.draggable);
+		this.draggable = false;
+	},
+	animateChanged: function() {
+		this.$.client.setAnimate(this.animate);
+		this.animate = false;
+	},
+	wrapChanged: function() {
+		this.$.client.setWrap(this.wrap);
+		this.wrap = false;
+	},
+
+	isClient: function(inControl) {
+		return ! inControl.isPanel ;
+	},
+
+	initDone: false ,
+	rendered: function() {
+
+		if (this.initDone) { return ;}
+
+		var that = this ;
+		enyo.forEach(
+			this.controls,
+			function(c) {
+				if (that.isClient(c)) {
+					that.$.bar.addTab(c) ;
 				}
 			}
-		},
-		startTransition: enyo.nop,
-		finishTransition: enyo.nop,
-		stepTransition: enyo.nop,
-		refresh: enyo.nop
-	}
-);
+		);
+
+		this.setIndex(this.controls.length - 1);
+		this.initDone = true;
+
+		// must be called at the end otherwise kind size is weird
+		this.inherited(arguments);
+	},
+
+	//* @public
+	/**
+	 *
+	 * Add a new control managed by the tab bar. inControl is a
+	 * control with optional caption attribute. When not specified
+	 * the tab will have a generated caption like 'Tab 0', 'Tab
+	 * 1'. etc...
+	 *
+	 */
+	addTab: function(inControl){
+		this.$.bar.addTab(inControl);
+		this.setIndex(this.controls.length - 1);
+	},
+
+	//* @public
+	/**
+	 *
+	 * Remove a tab from the tab bar. The control managed by the
+	 * tab will also be destroyed. target is an object with either
+	 * a caption attribute or an index. The tab(s) matching the
+	 * caption will be destroyed or the tab with matching index
+	 * will be destroyed.
+	 *
+	 * Example:
+
+		myTab.removeTab({'index':0}); // remove the leftmost tab
+		myTab.removeTab({'caption':'foo.js'});
+
+	*/
+
+	removeTab: function(indexData) {
+		this.$.bar.removeTab(indexData);
+	},
+
+	// layout is a property of inherited UiComponent
+	layoutKindChanged: function() {
+		if (!this.layout) {
+			this.layout = enyo.createFromKind("FittableRowsLayout", this);
+		}
+		this.$.client.setLayoutKind(this.layoutKind);
+	},
+	indexChanged: function() {
+		// FIXME: initialization order problem
+		if (this.$.client.layout) {
+			this.$.client.setIndex(this.index);
+		}
+		this.index = this.$.client.getIndex();
+	},
+	switchPanel: function(inSender, inEvent) {
+		if (this.hasNode()) {
+			var i = inEvent.index;
+			if (this.getIndex() != i) {
+				this.setIndex(i);
+			}
+		}
+	},
+	startTransition: enyo.nop,
+	finishTransition: enyo.nop,
+	stepTransition: enyo.nop,
+	refresh: enyo.nop
+});

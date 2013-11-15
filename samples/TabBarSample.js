@@ -19,17 +19,19 @@ enyo.kind({
 		onTabChanged: "switchStuff"
 	},
 
-	create: function() {
+	rendered: function() {
 		this.inherited(arguments);
 		this.$.bar.addTab(
 			{
 				'caption': 'English',
+				'tooltipMsg': 'English/Anglais',
 				'data' : { 'msg': 'Hello World !' } // arbitrary user data
 			}
 		) ;
 		this.$.bar.addTab(
 			{
 				'caption': 'Français',
+				'tooltipMsg': 'French/Français',
 				'data' : { 'msg': 'Bonjour tout le monde !' } // arbitrary user data
 			}
 		) ;
@@ -47,7 +49,7 @@ enyo.kind(
 		name: "DynamicTabBar",
 		fit: true,
 		components: [
-			{name:"bar",kind: "onyx.TabBar"},
+			{name:"bar",kind: "onyx.TabBar", maxMenuHeight: 200},
 			{
 				style: "border: 2px solid grey; ",
 				components: [
@@ -75,7 +77,7 @@ enyo.kind(
 		},
 
 		number: 1,
-		create: function() {
+		rendered: function() {
 			this.inherited(arguments);
 			var date = new Date();
 			this.creationTime = date.getTime();
@@ -88,8 +90,8 @@ enyo.kind(
 			var delta = ( date.getTime() - this.creationTime ) / 1000 ;
 			this.$.bar.addTab(
 				{
-					'caption': 'Tab label ' + this.number++ ,
-					data: { msg: "tab created after " + delta + " seconds" }
+					'caption': 'Tab label ' + this.number ,
+					data: { msg: "tab " + this.number++ + " created after " + delta + " seconds" }
 				}
 			) ;
 		},

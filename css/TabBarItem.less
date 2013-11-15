@@ -9,14 +9,15 @@
 	border-top-left-radius: 5px;
 	background-color: @tab-inactive ;
 	z-index: 1;
-	padding-top: 0.1em;
-	padding-bottom: 0.3em ;
+	padding-top: 0.2em;
+	padding-bottom: 0.7em ;
 	vertical-align: baseline;
 
 	&.active {
 		border-bottom: 1px solid @tab-strong;
 		background-color: @tab-strong;
 		z-index: 3;
+		padding-top: 0.3em;
 	}
 
 	&:hover {
@@ -27,7 +28,6 @@
 		overflow: hidden;
 		margin: 3px;
 		border: 1px solid transparent;
-		tab--space: nowrap;
 		background-color: transparent ;
 	}
 
@@ -55,12 +55,30 @@
 	height: 90%;
 	width: 2em;
 	top: 2px;
-	right: 0;
+	right: 19px; // to place it left of close button
 	position: absolute;
 	
 	.onyx-tab-item-gradient( fadeout(@tab-inactive,100%), @tab-inactive);
 
-	&.active, &:hover {
+	&.active {
 		.onyx-tab-item-gradient( fadeout(@tab-strong,100%), @tab-strong);
+	}
+}
+
+// artificial class set on dissolve item when mouse hovers over tabitem
+.onyx-tab-item-hovered {
+	.onyx-tab-item-gradient( fadeout(@tab-strong,100%), @tab-strong);
+}
+
+.onyx-tab-item-close {
+	display: inline-block;
+	margin-right: 3px;
+	width: 16px;
+	height: 16px;
+	vertical-align: middle;
+	background-repeat: no-repeat;
+	background-image: url('@{onyx-image-path}/close-inactive.png');
+	&:hover {
+		background-image: url('@{onyx-image-path}/close-active.png');
 	}
 }

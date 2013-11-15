@@ -22,7 +22,7 @@ Here's an example:
 			onTabChanged: "switchStuff"
 		},
 
-		create: function() {
+		rendered: function() {
 			this.inherited(arguments);
 			this.$.bar.addTab(
 				{
@@ -38,13 +38,22 @@ Here's an example:
 		}
 	});
 
+Tabs must be created after construction, i.e. in rendered function.
+
+If tabs are created in 'create' function, the last created tabs will
+not be selected.
+
 */
 
 enyo.kind ({
 	name: 'onyx.TabBar',
-	kind: "FittableColumns",
+	kind: "enyo.FittableColumns",
 	isPanel: true,
 	classes: "onyx-tab-bar",
+
+	checkBeforeClosing: false,
+
+	debug: false,
 
 	events: {
 		/**
@@ -79,35 +88,80 @@ enyo.kind ({
 		onTabRemoved: ""
 	},
 
+	/**
+	 * Set a maximum height for the scrollable menu that can be raised on the right of
+	 * the tab bar.
+	 */
+	published: {
+		maxMenuHeight: 600
+	},
+
+	handlers: {
+		onTabCloseRequest: "requestTabClose",
+		onShowTooltip: "showTooltip",
+		onHideTooltip: "hideTooltip"
+	},
+
 	components: [
 		{
-			name: "scroller",
-			kind: "Scroller",
-			fit:true,
-			maxHeight: "100px",
-
-			// FIXME: may need to be revisited for desktop
-			// activate calls scrollIntoView, which call strategy.scroll
-			// this method is implemented *only* in TransitionScrollStrategy
-			// which may be an enyo bug (2303)
-			strategyKind: "TransitionScrollStrategy",
-			//strategyKind: "TranslateScrollStrategy",
-
-			thumb: false,
-			vertical: "hidden",
-			horizontal: "auto",
-			classes: "onyx-tab-bar-scroller",
+			fit:true, 
 			components: [
 				{
-					name: "tabs",
-					classes: 'onyx-tab-holder',
-					kind: "onyx.RadioGroup",
-					defaultKind: "onyx.TabBar.Item",
-					style: "text-align: left; white-space: nowrap;",
-					onTabActivated: 'switchTab'
+					name: "scroller",
+					kind: "enyo.Scroller",
+					
+					maxHeight: "100px",
+
+					touch: true,
+
+					thumb: false,
+					vertical: "hidden",
+					horizontal: "auto",
+					classes: "onyx-tab-bar-scroller",
+					components: [
+						{
+							classes: "onyx-tab-wrapper",
+							components: [
+								{
+									// double level of components is required to add padding
+									// at this level. This avoid "> div" in selectors
+									components: [
+										{
+											name: "tabs",
+											classes: 'onyx-tab-holder',
+											kind: "onyx.RadioGroup",
+											defaultKind: "onyx.TabBar.Item",
+											style: "text-align: left; white-space: nowrap;",
+											onTabActivated: 'switchTab'
+										},
+										{ classes: "onyx-tab-line"},
+										{ classes: "onyx-tab-rug"}
+									]
+								}
+							]
+						}
+					]
 				},
-				{ classes: "onyx-tab-line"},
-				{ classes: "onyx-tab-rug"}
+				{kind: "onyx.TooltipDecorator", components:[
+					{kind: "onyx.Tooltip", classes: "onyx-tab-tooltip"}
+				]}
+			]
+
+		},
+		{
+			kind: "onyx.MenuDecorator",
+			name: "tabPicker",
+			onSelect: "popupButtonTapped",
+			components: [
+				{
+					kind: "onyx.IconButton",
+					classes: "onyx-more-button",
+					ontap: "showPopupAtEvent"
+				},
+				{
+					kind: "onyx.Menu",
+					name: "popup"
+				}
 			]
 		}
 	],
@@ -132,6 +186,16 @@ enyo.kind ({
 		return true;
 	},
 
+	create: function () {
+		this.inherited(arguments);
+		this.maxMenuHeightChanged();
+	},
+
+	maxMenuHeightChanged: function() {
+		this.$.popup.setMaxHeight(this.getMaxMenuHeight());
+	},
+
+
 	rendered: function() {
 		this.inherited(arguments);
 		this.resetWidth();
@@ -149,20 +213,22 @@ enyo.kind ({
 	 */
 	addTab: function(inControl) {
 		var c = inControl.caption || ("Tab " + this.lastIndex);
+		this.selectedId = this.lastIndex++ ;
 		var t = this.$.tabs.createComponent(
 			{
 				content:  c,
 				userData: inControl.data || { },
+				tooltipMsg: inControl.tooltipMsg, //may be null
 				userId:   inControl.userId, // may be null
-				tabIndex: this.lastIndex++,
+				tabIndex: this.selectedId,
 				addBefore: this.$.line
 			}
 		);
+
+		t.render();
+		this.resetWidth();
+		t.raise();
 		t.setActive(true);
-		if (this.hasNode()) {
-			t.render();
-			this.resetWidth();
-		}
 		return t;
 	},
 
@@ -176,25 +242,53 @@ enyo.kind ({
 	 *
 	 * Example:
 
-		myTab.remove({'index':0}); // remove the leftmost tab
-		myTab.remove({'caption':'foo.js'});
+		myTab.removeTab({'index':0}); // remove the leftmost tab
+		myTab.removeTab({'caption':'foo.js'});
 
 	 */
 
 	removeTab: function(target) {
 		var tab = this.resolveTab(target,'removeTab');
-		if (tab) {
-			tab.destroy();
-		}
+
+		if (! tab) { return; }
+
+		var activeTab = this.$.tabs.active ;
+		var keepActiveTab = activeTab !== tab ;
+		var gonerIndex = tab.indexInContainer();
+		var tabData = {
+			index:   tab.tabIndex,
+			caption: tab.content,
+			userId:  tab.userId,
+			data:    tab.userData
+		} ;
+
+		tab.destroy();
 		this.resetWidth();
-		this.doTabRemoved(
-			{
-				index:   tab.tabIndex,
-				caption: tab.content,
-				userId:  tab.userId,
-				data:    tab.userData
-			}
-		);
+
+		var ctrls = this.$.tabs.controls;
+		var ctrlLength = ctrls.length ;
+		var replacementTab
+				= keepActiveTab           ? activeTab
+				: gonerIndex < ctrlLength ? ctrls[gonerIndex]
+				:                           ctrls[ ctrlLength - 1 ];
+
+		// replacementTab may be undef if all tabs were removed
+		if (replacementTab) {
+			replacementTab.setActive(true) ;
+			replacementTab.raise();
+			this.$.scroller.scrollIntoView(replacementTab);
+			this.doTabChanged(
+				{
+					index:   replacementTab.index,
+					caption: replacementTab.caption,
+					tooltipMsg: replacementTab.tooltipMsg,
+					data:    replacementTab.userData,
+					userId:  replacementTab.userId
+				}
+			);
+		}
+
+		this.doTabRemoved(tabData);
 	},
 
 	//* @public
@@ -209,13 +303,20 @@ enyo.kind ({
 
 	requestRemoveTab: function(target) {
 		var tab = this.resolveTab(target,'removeTab');
+		var tabData = {
+			index:   tab.tabIndex,
+			caption: tab.content,
+			tooltipMsg: tab.tooltipMsg,
+			userId:  tab.userId,
+			data:    tab.userData
+		} ;
 		var that = this ;
 		if (tab) {
-			target.next = function(err) {
+			tabData.next = function(err) {
 				if (err) { throw new Error(err);   }
 				else     { that.removeTab(target); }
 			} ;
-			this.doTabRemoveRequested( target ) ;
+			this.doTabRemoveRequested( tabData ) ;
 		}
 	},
 
@@ -243,12 +344,29 @@ enyo.kind ({
 			);
 		}
 		else if (typeof target.index !== 'undefined') {
-			targetTab = this.$.tabs.controls[target.index];
+			enyo.forEach(
+				this.$.tabs.controls,
+				function(tab){
+					if (tab.tabIndex === target.index) {
+						targetTab = tab;
+					}
+				}
+			);
 		}
 		else {
 			throw new Error("internal: " + action_name+ " called without index or caption");
 		}
 		return targetTab ;
+	},
+
+	//@ protected
+	requestTabClose: function(inSender,inEvent) {
+		if (this.checkBeforeClosing) {
+			this.requestRemoveTab(inEvent) ;
+		}
+		else {
+			this.removeTab(inEvent);
+		}
 	},
 
 	//* @public
@@ -270,31 +388,56 @@ enyo.kind ({
 	activate: function(target) {
 		var tab = this.resolveTab(target,'activate');
 		if (tab) {
-			tab.setActive(true) ;
-			this.$.scroller.scrollIntoView(tab);
+			this.raiseTab(tab);
 		}
+	},
+
+	raiseTab: function(tab) {
+		tab.setActive(true) ;
+		this.$.scroller.scrollIntoView(tab);
 	},
 
 	//* @protected
 	switchTab: function(inSender, inEvent) {
-		var oldIndex = this.selectedId || 0 ;
+		var oldIndex = this.selectedId ;
 		this.selectedId = inEvent.index;
-		this.doTabChanged(
-			{
-				index:   inEvent.index,
-				caption: inEvent.caption,
-				data:    inEvent.userData,
-				userId:  inEvent.userId,
-				next:    enyo.bind(this,'undoSwitchOnError', oldIndex)
+		if ( this.selectedId != oldIndex ) {
+			this.doTabChanged(
+				{
+					index:   inEvent.index,
+					caption: inEvent.caption,
+					tooltipMsg: inEvent.tooltipMsg,
+					data:    inEvent.userData,
+					userId:  inEvent.userId,
+					next:    enyo.bind(this,'undoSwitchOnError', oldIndex)
+				}
+			);
+		}
+		return true ;
+	},
+
+	showTooltip: function(inSender, inEvent) {
+		var t = inEvent.tooltipContent;
+		var bounds = inEvent.bounds;
+		if(t){
+			if(!this.$.tooltip.showing){
+				this.$.tooltip.setContent(t);
+				var leftSpace = bounds.left + ( bounds.width / 2 );
+				this.$.tooltipDecorator.applyStyle("left", leftSpace + "px");
+				this.$.tooltip.show();
 			}
-		);
+		}
+		return true ;
+	},
+
+	hideTooltip: function() {
+		this.$.tooltip.hide();
 		return true ;
 	},
 
 	//* @protected
 	undoSwitchOnError: function(oldIndex, err) {
 		if (err) {
-			this.log("app requested to activate back tab index "+ oldIndex + " because ",err);
 			this.activate({ 'index': oldIndex } ) ;
 		}
 	},
@@ -313,12 +456,10 @@ enyo.kind ({
 			this.$.tabs.getControls(),
 			function(tab){
 				var w = tab.origWidth() ;
-				enyo.log('add ' + w) ;
 				// must add margin and padding of inner button and outer tab-item
 				result += w + 18 ;
 			}
 		);
-		this.log("computeOrigTabWidth: " + result );
 		return result;
 	},
 
@@ -326,7 +467,6 @@ enyo.kind ({
 	adjustTabWidth: function(inSender, inEvent) {
 		var scrolledWidth = this.$.scroller.getBounds().width;
 		var tabsWidth = this.origTabWidth ;
-		this.log(" scrolled ", scrolledWidth , "tabw:" + tabsWidth ) ;
 		var coeff = scrolledWidth > tabsWidth ? 1 : scrolledWidth / tabsWidth ;
 		coeff = coeff < 0.5 ? 0.5 : coeff;
 		this.applyCoeff(coeff) ;
@@ -345,5 +485,44 @@ enyo.kind ({
 		this.applyCoeff(1) ; // restore original size to all tabs
 		this.origTabWidth = this.computeOrigTabWidth(); // measure tab width
 		this.adjustTabWidth();
+	},
+
+	isEmpty: function() {
+		return ! this.$.tabs.getControls().length ;
+	},
+
+	// Since action buttons of Contextual Popups are not dynamic, this
+	// kind is created on the fly and destroyed once the user clicks
+	// on a button
+	showPopupAtEvent: function(inSender, inEvent) {
+		var that = this ;
+		var popup = this.$.popup;
+
+		for (var name in popup.$) {
+			if (popup.$.hasOwnProperty(name) && /menuItem/.test(name)) {
+				popup.$[name].destroy();
+			}
+		}
+
+		//popup.render();
+		enyo.forEach(
+			this.$.tabs.getControls(),
+			function(tab){
+				that.$.popup.createComponent({
+					content: tab.content,
+					value: tab.tabIndex
+				}) ;
+			}
+		);
+
+		popup.maxHeightChanged();
+		popup.showAtPosition({top: 30, right:30});
+		this.render();
+		this.resized(); // required for IE10 to work correctly
+		return ;
+	},
+
+	popupButtonTapped: function(inSender, inEvent) {
+		this.activate({ index: inEvent.originator.value } );
 	}
 });
